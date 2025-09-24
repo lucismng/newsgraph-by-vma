@@ -1,0 +1,6 @@
+{
+  "name": "VMAtintuc",
+  "description": "A professional news ticker overlay for OBS that fetches and summarizes news from various major Vietnamese news outlets across multiple categories (World, Economy, Law, Technology, etc.). It features a dynamic weather bar for 34 provinces and a smooth scrolling news banner, mimicking a national broadcast style.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VMA News Ticker Overlay</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    /* Ensure a transparent background for the OBS overlay */
+    html, body {
+      background-color: transparent;
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Prevent scrollbars on the body itself */
+      font-family: 'Montserrat', sans-serif;
+      perspective: 1000px; /* Creates a 3D space for children elements */
+    }
+
+    /* Custom keyframes for the continuous horizontal scroll */
+    @keyframes scroll-left {
+      from {
+        transform: translateX(0);
+      }
+      to {
+        transform: translateX(-50%);
+      }
+    }
+    .animate-scroll-left {
+      animation-name: scroll-left;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+    
+    /* Main bar flip-in animation */
+    @keyframes flip-in {
+        from {
+            transform: rotateX(-90deg);
+            opacity: 0;
+        }
+        to {
+            transform: rotateX(0deg);
+            opacity: 1;
+        }
+    }
+
+    .animate-flip-in {
+        transform-origin: bottom center;
+        animation: flip-in 0.5s ease-out forwards;
+    }
+    
+    /* Reworked slide animations for WeatherBar content */
+    @keyframes slide-in-up {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slide-out-up {
+      from {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+    }
+    
+    .animate-slide-in {
+      animation: slide-in-up 0.3s ease-out forwards;
+    }
+
+    .animate-slide-out {
+      animation: slide-out-up 0.3s ease-in forwards;
+    }
+
+    /* Animation for clock content changes */
+    @keyframes clock-fade-in {
+      from { transform: translateY(-5px) scale(0.98); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .animate-clock-fade-in {
+        animation: clock-fade-in 0.3s ease-out forwards;
+    }
+
+
+    /* --- Centralized Ticker Styling --- */
+    /* Base Styles */
+    .news-ticker-bar { /* This is now just a flex container */ }
+    .clock-container, .scroller-container, .divider-bg {
+        background-color: #f3f4f6; /* Default: Tailwind gray-100 for the whole bar */
+        transition: background-color 0.3s ease;
+    }
+    .divider-line {
+        background-color: #d1d5db; /* gray-300 */
+        transition: background-color 0.3s ease;
+    }
+    .clock-text {
+        color: #007BFF;
+        transition: color 0.3s ease;
+    }
+    .breaking-news-tag, .disaster-warning-tag {
+        background-color: #ffffff;
+    }
+    .breaking-news-tag {
+        color: #dc2626; /* Tailwind red-600 */
+    }
+    .scroller-text {
+        color: #0056b3;
+    }
+    .weather-bar {
+        background: linear-gradient(to bottom, #007BFF, #0056b3);
+    }
+    .weather-bar .weather-text { color: #ffffff; }
+    .weather-bar .weather-text-strong { color: #ffffff; }
+    .weather-bar .weather-text-muted { color: rgba(255, 255, 255, 0.8); }
+
+    /* When weather bar is HIDDEN, clock/divider get a distinct theme */
+    .clock-container.clock-standalone,
+    .clock-container.clock-standalone + .divider-bg {
+      background-color: #007BFF;
+    }
+    .clock-container.clock-standalone .clock-text {
+      color: #ffffff;
+    }
+    .clock-container.clock-standalone + .divider-bg .divider-line {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+
+
+    /* Breaking News Mode */
+    .news-ticker-bar.breaking .clock-container,
+    .news-ticker-bar.breaking .scroller-container,
+    .news-ticker-bar.breaking .divider-bg {
+        background-color: #b91c1c; /* Tailwind red-700 */
+    }
+    .news-ticker-bar.breaking .divider-line {
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    .news-ticker-bar.breaking .clock-text,
+    .news-ticker-bar.breaking .scroller-text {
+        color: #ffffff;
+    }
+    .weather-bar.breaking {
+        background: linear-gradient(to bottom, #D50000, #9B0000);
+    }
+    
+    /* Breaking mode with weather bar HIDDEN */
+    .news-ticker-bar.breaking .clock-container.clock-standalone,
+    .news-ticker-bar.breaking .clock-container.clock-standalone + .divider-bg {
+      background-color: #D50000;
+    }
+    
+    
+    /* --- Disaster Warning Mode (now unified with Breaking News) --- */
+    .news-ticker-bar.disaster .clock-container,
+    .news-ticker-bar.disaster .scroller-container,
+    .news-ticker-bar.disaster .divider-bg {
+        background-color: #b91c1c !important; /* red-700 */
+    }
+    .news-ticker-bar.disaster .divider-line {
+        background-color: rgba(255, 255, 255, 0.3) !important;
+    }
+    .news-ticker-bar.disaster .clock-text,
+    .news-ticker-bar.disaster .scroller-text {
+        color: #ffffff !important;
+    }
+    .disaster-warning-tag { /* Tag in ticker */
+        background-color: #ffffff !important;
+        color: #dc2626 !important; /* red-600 */
+    }
+    .weather-bar.disaster {
+        background: linear-gradient(to bottom, #D50000, #9B0000) !important;
+    }
+    .weather-bar.disaster .scroller-text {
+         color: #ffffff !important;
+    }
+    .weather-bar.disaster .disaster-weather-tag { /* Tag in weather bar */
+        color: #ffffff;
+    }
+    
+    /* Disaster mode with weather bar HIDDEN */
+    .news-ticker-bar.disaster .clock-container.clock-standalone,
+    .news-ticker-bar.disaster .clock-container.clock-standalone + .divider-bg {
+      background-color: #D50000 !important;
+    }
+
+    /* Mourning Mode Overrides (High Contrast) */
+    .mourning-mode .clock-container,
+    .mourning-mode .divider-bg {
+        background-color: #e5e7eb !important; /* Gray-200 for clock */
+    }
+    .mourning-mode .divider-line {
+        background-color: #4b5563 !important; /* gray-600 */
+    }
+    .mourning-mode .scroller-container {
+        background-color: #ffffff !important; /* White for scroller */
+    }
+
+    .mourning-mode .news-ticker-bar.breaking .clock-container,
+    .mourning-mode .news-ticker-bar.breaking .scroller-container,
+    .mourning-mode .news-ticker-bar.breaking .divider-bg {
+        background-color: #000000 !important;
+    }
+    .mourning-mode .news-ticker-bar.breaking .divider-line {
+        background-color: rgba(255, 255, 255, 0.4) !important;
+    }
+    
+    .mourning-mode .clock-text,
+    .mourning-mode .scroller-text {
+        color: #000000 !important; /* Black text for normal mourning mode */
+    }
+    .mourning-mode .news-ticker-bar.breaking .clock-text,
+    .mourning-mode .news-ticker-bar.breaking .scroller-text {
+        color: #ffffff !important; /* White text for breaking mourning mode */
+    }
+    .mourning-mode .breaking-news-tag {
+        background-color: #dc2626 !important; /* Red background for high-alert tag */
+        color: #ffffff !important; /* White text for high-alert tag */
+    }
+    .mourning-mode .weather-bar {
+        background: linear-gradient(to bottom, #1a1a1a, #000000) !important;
+    }
+    .mourning-mode .weather-bar .weather-text,
+    .mourning-mode .weather-bar .weather-text-strong {
+        color: #e5e5e5 !important;
+    }
+    .mourning-mode .weather-bar .weather-text-muted {
+        color: #bdbdbd !important;
+    }
+    
+    /* Mourning mode with weather bar HIDDEN */
+    .mourning-mode .clock-container.clock-standalone,
+    .mourning-mode .clock-container.clock-standalone + .divider-bg {
+      background-color: #1a1a1a !important;
+    }
+    .mourning-mode .clock-container.clock-standalone .clock-text {
+      color: #e5e5e5 !important;
+    }
+    .mourning-mode .clock-container.clock-standalone + .divider-bg .divider-line {
+      background-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    /* Mourning + Breaking/Disaster with weather bar HIDDEN */
+    .mourning-mode .news-ticker-bar.breaking .clock-container.clock-standalone,
+    .mourning-mode .news-ticker-bar.disaster .clock-container.clock-standalone,
+    .mourning-mode .news-ticker-bar.breaking .clock-container.clock-standalone + .divider-bg,
+    .mourning-mode .news-ticker-bar.disaster .clock-container.clock-standalone + .divider-bg {
+      background-color: #000000 !important;
+    }
+
+
+    /* Disaster + Mourning Overrides */
+    .mourning-mode .news-ticker-bar.disaster .clock-container,
+    .mourning-mode .news-ticker-bar.disaster .scroller-container,
+    .mourning-mode .news-ticker-bar.disaster .divider-bg,
+    .mourning-mode .weather-bar.disaster {
+        background: #000000 !important;
+    }
+    .mourning-mode .disaster-warning-tag {
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+    }
+    .mourning-mode .weather-bar.disaster .disaster-weather-tag {
+        color: #e5e5e5 !important;
+    }
+
+
+    /* --- Tet Mode --- */
+    .tet-mode .clock-container,
+    .tet-mode .scroller-container,
+    .tet-mode .divider-bg {
+        background-color: #c9252c !important; /* Rich red */
+    }
+    .tet-mode .divider-line {
+        background-color: rgba(241, 196, 15, 0.4) !important; /* Gold with opacity */
+    }
+    .tet-mode .news-ticker-bar.breaking .clock-container,
+    .tet-mode .news-ticker-bar.breaking .scroller-container,
+    .tet-mode .news-ticker-bar.breaking .divider-bg {
+        background-color: #a60000 !important; /* Darker red for breaking */
+    }
+    .tet-mode .news-ticker-bar.breaking .divider-line {
+        background-color: rgba(241, 196, 15, 0.6) !important; /* Brighter gold */
+    }
+    .tet-mode .clock-text {
+        color: #f1c40f !important; /* Gold */
+    }
+    .tet-mode .scroller-text {
+        color: #ffffff !important; /* White for better readability */
+    }
+     .tet-mode .news-ticker-bar.breaking .scroller-text {
+        color: #f1c40f !important; /* Gold for breaking news text */
+    }
+    .tet-mode .breaking-news-tag {
+        background-color: #f1c40f !important;
+        color: #c9252c !important;
+    }
+
+    .tet-mode .weather-bar {
+        background: linear-gradient(to bottom, #A60000, #8A0000) !important;
+        position: relative;
+        z-index: 1;
+        overflow: hidden;
+    }
+    
+    .tet-mode .weather-bar.breaking {
+       background: linear-gradient(to bottom, #8A0000, #670000) !important;
+    }
+    
+    /* Tet mode with weather bar HIDDEN */
+    .tet-mode .clock-container.clock-standalone,
+    .tet-mode .clock-container.clock-standalone + .divider-bg {
+      background-color: #A60000 !important;
+    }
+    
+    /* Tet + Breaking/Disaster with weather bar HIDDEN */
+    .tet-mode .news-ticker-bar.breaking .clock-container.clock-standalone,
+    .tet-mode .news-ticker-bar.disaster .clock-container.clock-standalone,
+    .tet-mode .news-ticker-bar.breaking .clock-container.clock-standalone + .divider-bg,
+    .tet-mode .news-ticker-bar.disaster .clock-container.clock-standalone + .divider-bg {
+      background-color: #8A0000 !important;
+    }
+    
+    .tet-mode .weather-bar::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg width='400' height='100' xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Cdefs%3E%3Cpath id='p' d='M0%2C0 C-2%2C-10 2%2C-10 0%2C-15 C2%2C-10 -2%2C-10 0%2C0 z' /%3E%3Cg id='mai' fill='%23f1c40f' stroke='%23e67e22' stroke-width='0.5'%3E%3Cuse href='%23p' transform='rotate(0)'/%3E%3Cuse href='%23p' transform='rotate(72)'/%3E%3Cuse href='%23p' transform='rotate(144)'/%3E%3Cuse href='%23p' transform='rotate(216)'/%3E%3Cuse href='%23p' transform='rotate(288)'/%3E%3C/g%3E%3Cg id='dao' fill='%23ffc0cb' stroke='%23e75480' stroke-width='0.5'%3E%3Cuse href='%23p' transform='rotate(0)'/%3E%3Cuse href='%23p' transform='rotate(72)'/%3E%3Cuse href='%23p' transform='rotate(144)'/%3E%3Cuse href='%23p' transform='rotate(216)'/%3E%3Cuse href='%23p' transform='rotate(288)'/%3E%3C/g%3E%3C/defs%3E%3Cpath d='M-20%2C70 Q100%2C80 200%2C50 T 420%2C60' stroke='%23f1c40f' stroke-width='2' fill='none' opacity='0.6'/%3E%3Cpath d='M-10%2C30 Q120%2C20 250%2C45 T 410%2C35' stroke='%23f1c40f' stroke-width='1.5' fill='none' opacity='0.5'/%3E%3Cuse href='%23mai' transform='translate(50 60) scale(0.6) rotate(15)'/%3E%3Cuse href='%23dao' transform='translate(90 40) scale(0.5) rotate(-10)'/%3E%3Cuse href='%23mai' transform='translate(150 75) scale(0.5) rotate(30)'/%3E%3Cuse href='%23dao' transform='translate(180 25) scale(0.6) rotate(5)'/%3E%3Cuse href='%23mai' transform='translate(240 60) scale(0.7) rotate(-25)'/%3E%3Cuse href='%23dao' transform='translate(300 70) scale(0.5) rotate(20)'/%3E%3Cuse href='%23mai' transform='translate(350 45) scale(0.6) rotate(0)'/%3E%3C/svg%3E");
+        background-repeat: repeat-x;
+        background-size: 400px auto;
+        background-position: 0 100%;
+        opacity: 0.2;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    .tet-mode .weather-bar .weather-text,
+    .tet-mode .weather-bar .weather-text-strong {
+        color: #ffffff !important;
+    }
+    .tet-mode .weather-bar .weather-text-muted {
+        color: #fde047 !important; /* Lighter Gold/Yellow */
+    }
+    
+    /* Brighter up/down indicators for contrast */
+    .tet-mode .weather-bar .text-green-300 { color: #86efac !important; }
+    .tet-mode .weather-bar .text-red-300 { color: #fca5a5 !important; }
+    .tet-mode .weather-bar .text-yellow-300 { color: #fde047 !important; }
+
+    .tet-mode .weather-bar .bg-white\/30 { /* Divider */
+        background-color: rgba(241, 196, 15, 0.4) !important;
+    }
+    
+    /* Disaster + Tet Overrides */
+     .tet-mode .news-ticker-bar.disaster .clock-container,
+    .tet-mode .news-ticker-bar.disaster .scroller-container,
+    .tet-mode .news-ticker-bar.disaster .divider-bg {
+        background-color: #a60000 !important; /* Darker red for breaking */
+    }
+    .tet-mode .disaster-warning-tag {
+        background-color: #f1c40f !important; /* Tet gold */
+        color: #c9252c !important; /* Tet red */
+    }
+    .tet-mode .weather-bar.disaster {
+        background: linear-gradient(to bottom, #8A0000, #670000) !important;
+    }
+     .tet-mode .weather-bar.disaster .disaster-weather-tag {
+        color: #fde047 !important; /* Lighter Gold/Yellow */
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.8.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
